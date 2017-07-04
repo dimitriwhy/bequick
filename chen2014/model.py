@@ -27,6 +27,14 @@ def unpack_inputs(inputs):
     return form, pos, deprel
 
 
+def clipped_error(x):
+  # Huber loss
+  try:
+    return tf.select(tf.abs(x) < 1.0, 0.5 * tf.square(x), tf.abs(x) - 0.5)
+  except:
+    return tf.where(tf.abs(x) < 1.0, 0.5 * tf.square(x), tf.abs(x) - 0.5)
+
+
 class Network(object):
     def __init__(self, form_size, form_dim, pos_size, pos_dim, deprel_size, deprel_dim, hidden_dim, output_dim,
                  dropout, l2):
@@ -173,7 +181,7 @@ class DeepQNetwork(Network):
                                     reduction_indices=1)
         regularizer = tf.nn.l2_loss(self.W0) + tf.nn.l2_loss(self.b0) + tf.nn.l2_loss(self.W1) + tf.nn.l2_loss(self.b1)
 
-        self.loss = tf.reduce_mean(tf.square(predicted_q - self.output)) + l2 * regularizer
+        self.loss = tf.reduce_max(clipped_error(predicted_q - self.output)) + l2 * regularizer
         # self.optimization = tf.train.RMSPropOptimizer(learning_rate=0.00025, momentum=0.95).minimize(self.loss)
         self.optimization = tf.train.AdamOptimizer().minimize(self.loss)
 
