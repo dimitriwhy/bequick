@@ -62,7 +62,7 @@ class Memory(object):
         self.terminate[self.current_id] = terminate
         self.current_id = self.current_id + 1
         if self.current_id >= self.memory_size:
-            self.cuurent_id = self.margin
+            self.current_id = self.margin
         self.memory_volume += 1
         if self.memory_volume >= self.memory_size:
             self.memory_volume = self.memory_size
@@ -71,7 +71,7 @@ class Memory(object):
         return self.memory_volume
 
     def set_margin(self):
-        self.margin = self.volume
+        self.margin = self.memory_volume
 
     def sample(self):
         ids = np.random.choice(self.volume(), self.batch_size)
@@ -79,7 +79,6 @@ class Memory(object):
                 self.a_t[ids], self.r_t[ids],
                 self.s_t_plus_1_form[ids], self.s_t_plus_1_pos[ids], self.s_t_plus_1_deprel[ids],
                 self.s_t_plus_1_valid_mask[ids], self.terminate[ids])
-
 
 def find_best(parser, state, scores):
     best_score, best_i, best_name = None, None, None
@@ -194,7 +193,8 @@ def main():
             memory.add(x[0], x[1], x[2], chosen_id, r, next_x[0], next_x[1], next_x[2],\
                        valid_mask, s.terminate())
             i += 1
-    memory.set_margin()        
+    memory.set_margin()
+    LOG.info("margin={0}".format(memory.margin))
     # n = 0
     # while memory.volume() < opts.replay_start_size:
     #     data = train_dataset[n]
