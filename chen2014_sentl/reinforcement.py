@@ -47,7 +47,7 @@ class Memory(object):
         self.s_t_plus_1_deprel = np.zeros((memory_size, len(Parser.DEPREL_NAMES)), dtype=np.int32)
         self.s_t_plus_1_valid_mask = np.zeros((memory_size, n_actions), dtype=np.bool)
         self.terminate = np.zeros(memory_size, dtype=np.bool)
-
+        self.margin = memory_size
     def add(self, s_t_form, s_t_pos, s_t_deprel, a_t, r_t, s_t_plus_1_form, s_t_plus_1_pos, s_t_plus_1_deprel,
             s_t_valid_mask, terminate):
         self.s_t_form[self.current_id] = s_t_form
@@ -60,13 +60,18 @@ class Memory(object):
         self.s_t_plus_1_deprel[self.current_id] = s_t_plus_1_deprel
         self.s_t_plus_1_valid_mask[self.current_id] = s_t_valid_mask
         self.terminate[self.current_id] = terminate
-        self.current_id = (self.current_id + 1) % self.memory_size
+        self.current_id = self.current_id + 1
+        if self.current_id >= self.memory_size:
+            self.cuurent_id = self.margin
         self.memory_volume += 1
         if self.memory_volume >= self.memory_size:
             self.memory_volume = self.memory_size
 
     def volume(self):
         return self.memory_volume
+
+    def set_margin(self):
+        self.margin = self.volume
 
     def sample(self):
         ids = np.random.choice(self.volume(), self.batch_size)
@@ -117,10 +122,10 @@ def main():
     cmd.add_argument("--dropout", dest="dropout", type=float, default=0.5, help="The probability for dropout.")
     cmd.add_argument("--eps-init", dest="eps_init", type=float, default=1., help="The initial value of eps.")
     cmd.add_argument("--eps-final", dest="eps_final", type=float, default=0.1, help="The final value of eps.")
-    cmd.add_argument("--eps-decay-steps", dest="eps_decay_steps", type=int, default=1000000,
+    cmd.add_argument("--eps-decay-steps", dest="eps_decay_steps", type=int, default=100000,
                      help="The number of states eps anneal.")
     cmd.add_argument("--discount", dest="discount", type=float, default=0.99, help="The discount factor.")
-    cmd.add_argument("--memory-size", dest="memory_size", type=int, default=1000000, help="The size of memory")
+    cmd.add_argument("--memory-size", dest="memory_size", type=int, default=2000000, help="The size of memory")
     cmd.add_argument("--batch-size", dest="batch_size", type=int, default=512, help="The number of samples each batch")
     cmd.add_argument("--target-update-freq", dest="target_update_freq", type=int, default=3000,
                      help="The frequency of update target network.")
@@ -175,21 +180,37 @@ def main():
     memory = Memory(system.num_actions(), opts.memory_size, opts.batch_size)
     # starting from a random policy
     np.random.shuffle(train_dataset)
-    n = 0
-    while memory.volume() < opts.replay_start_size:
-        data = train_dataset[n]
-        n += 1
-        if n == len(train_dataset):
-            n = 0
-        s = State(data)
-        valid_ids, _ = get_valid_actions(parser, s)
+    for n, train_data in enumerate(train_dataset):
+        xs, ys = parser.generate_training_instance(train_data)
+        s = State(train_data)
+        i = 0
         while not s.terminate():
             x = parser.parameterize_x(s)
-            chosen_id = np.random.choice(valid_ids)
+            chosen_id = ys[i]
+            # LOG.info("chosen_id = {0}".format(chosen_id))
             r = system.scored_transit(s, chosen_id)
             next_x = parser.parameterize_x(s)
             valid_ids, valid_mask = get_valid_actions(parser, s)
-            memory.add(x[0], x[1], x[2], chosen_id, r, next_x[0], next_x[1], next_x[2], valid_mask, s.terminate())
+            memory.add(x[0], x[1], x[2], chosen_id, r, next_x[0], next_x[1], next_x[2],\
+                       valid_mask, s.terminate())
+            i += 1
+    memory.set_margin()        
+    # n = 0
+    # while memory.volume() < opts.replay_start_size:
+    #     data = train_dataset[n]
+    #     n += 1
+    #     if n == len(train_dataset):
+    #         n = 0
+    #     s = State(data)
+    #     valid_ids, _ = get_valid_actions(parser, s)
+    #     while not s.terminate():
+    #         x = parser.parameterize_x(s)
+    #         chosen_id = np.random.choice(valid_ids)
+    #         r = system.scored_transit(s, chosen_id)
+    #         next_x = parser.parameterize_x(s)
+    #         valid_ids, valid_mask = get_valid_actions(parser, s)
+    #         memory.add(x[0], x[1], x[2], chosen_id, r, next_x[0], next_x[1], next_x[2], valid_mask, s.terminate())
+
     LOG.info("Finish random initialization process, memory size {0}".format(memory.volume()))
 
     # Learning DQN

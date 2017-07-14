@@ -145,6 +145,8 @@ def main():
                      help="The size of of states before replay start.")
     cmd.add_argument("--language", dest="lang", default="en",
                      help="the language")
+    cmd.add_argument("--resamp-freq", dest="resamp_freq", type=int,
+                     default=1, help="resampling frequency.")
     opts = cmd.parse_args()
 
     raw_train = read_conllx_dataset(opts.reference)
@@ -312,46 +314,69 @@ def main():
             LOG.info("Start of iteration {0}, eps = {1}, data shuffled."
                      .format(iteration, eps))
             
-        pn = np.random.rand()
+        # pn = np.random.rand()
+        pn = -1
+        total_forms, total_postags, total_deprels, total_Ys, total_rewards = [], [], [], [], []
         if pn < las/(best_las + (1e-6)):
             data = train_dataset[n]
 
-            s = State(data)
-            valid_ids, valid_mask = get_valid_actions(parser, s)
-            forms, postags, deprels, Ys, rewards, term = [], [], [], [], [], []
-            while not s.terminate():
-                # eps-greedy, rollout policy
-                p = np.random.rand()
-                #p = 0.1
-                x = parser.parameterize_x(s)
-                # LOG.info("valid_ids = {0}".format(valid_ids))
-                if p > eps:
-                    prediction = model.policy(session, x)[0]
-                    prediction[~valid_mask] = np.NINF
-                    chosen_id = np.argmax(prediction).item()
-                else:
-                    chosen_id = np.random.choice(valid_ids)
-                    # LOG.info("chosen_id = {0}".format(chosen_id))
-                r = system.scored_transit(s, chosen_id)
-                forms.append(x[0])
-                postags.append(x[1])
-                deprels.append(x[2])
-                Ys.append(chosen_id)
-                rewards.append(r)
-                term.append(s.terminate())
+            for rep_t in range(opts.resamp_freq):
+                s = State(data)
                 valid_ids, valid_mask = get_valid_actions(parser, s)
-            payload = memory.sample()
-            xs = payload[0], payload[1], payload[2]
-            actions = payload[3]
-            ys = payload[4].copy()
-            # terminated = payload[5].copy()
+                forms, postags, deprels, Ys, rewards, term = [], [], [], [], [], []
+                while not s.terminate():
+                    # eps-greedy, rollout policy
+                    p = np.random.rand()
+                    # p = 0
+                    x = parser.parameterize_x(s)
+                    # LOG.info("valid_ids = {0}".format(valid_ids))
+                    if p > eps:
+                        prediction = model.policy(session, x)[0]
+                        prediction[~valid_mask] = np.NINF
+                        chosen_id = np.argmax(prediction).item()
+                    else:
+                        chosen_id = np.random.choice(valid_ids)
+                    p = np.random.rand()
+                    if p < 0.0001:
+                        LOG.info("Sample predicted las = {0}".format(np.max(prediction).item()))
+                    # LOG.info("chosen_id = {0}".format(chosen_id))
+                    r = system.scored_transit(s, chosen_id)
+                    forms.append(x[0])
+                    postags.append(x[1])
+                    deprels.append(x[2])
+                    Ys.append(chosen_id)
+                    rewards.append(r)
+                    term.append(s.terminate())
+                    valid_ids, valid_mask = get_valid_actions(parser, s)
+                    
+                c_las = las_calculate(rewards)
+                # for i in range(len(rewards)):
+                #     memory.add(forms[i], postags[i], deprels[i], Ys[i], c_las, term[i])
+                rewards = [c_las for r in rewards]
+                total_forms += forms
+                total_postags += postags
+                total_deprels += deprels
+                total_Ys += Ys
+                total_rewards += rewards
+            xs, ys = parser.generate_training_instance(train_data)
+            # LOG.info("total_forms = {0}, xs[0]={1}, type(xs[0])=".format(total_forms, xs[0], type(xs[0])))
+            total_forms += [np.array([xs[0][i]]) for i in range(len(xs[0]))]
+            total_postags += [np.array([xs[1][i]]) for i in range(len(xs[1]))]
+            total_deprels += [np.array([xs[2][i]]) for i in range(len(xs[2]))]
+            # LOG.info("total_Ys={0}, ys={1}".format(total_Ys, type(ys)))
+            total_Ys += list(ys)
+            total_rewards += [1 for r in ys]
+            # payload = memory.sample()
+            # xs = payload[0], payload[1], payload[2]
+            # actions = payload[3]
+            # ys = payload[4].copy()
             if n % 10 == 0:
-                cost_explore += model.train(session, xs, actions, ys)
-
-            c_las = las_calculate(rewards)
-            for i in range(len(rewards)):
-                memory.add(forms[i], postags[i], deprels[i], Ys[i], c_las, term[i])
-            
+                forms = np.concatenate(total_forms)
+                postags = np.concatenate(total_postags)
+                deprels = np.concatenate(total_deprels)
+                Ys = np.array(total_Ys)
+                rewards = np.array(total_rewards)
+                cost_explore += model.train(session, (forms, postags, deprels), Ys, rewards)
             n += 1
             if n == len(train_dataset) :
                 n = 0
@@ -359,6 +384,7 @@ def main():
 
             eps -= eps_decay_steps
             if eps < opts.eps_final:
+
                 eps = opts.eps_final
         else:
             sl_count += 1
