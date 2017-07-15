@@ -107,7 +107,7 @@ class Classifier(Network):
 
 class DeepQNetwork(Network):
     def __init__(self, form_size, form_dim, pos_size, pos_dim, deprel_size, deprel_dim, hidden_dim, output_dim, dropout,
-                 l2):
+                 l2, learning_rate):
         super(DeepQNetwork, self).__init__(form_size, form_dim, pos_size, pos_dim, deprel_size, deprel_dim, hidden_dim,
                                            output_dim, dropout, l2)
         self.output = tf.placeholder(tf.float32, shape=(None, ), name="y_o")
@@ -175,7 +175,7 @@ class DeepQNetwork(Network):
 
         self.loss = tf.reduce_mean(tf.square(predicted_q - self.output)) + l2 * regularizer
         # self.optimization = tf.train.RMSPropOptimizer(learning_rate=0.00025, momentum=0.95).minimize(self.loss)
-        self.optimization = tf.train.AdamOptimizer().minimize(self.loss)
+        self.optimization = tf.train.AdamOptimizer(learning_rate=learning_rate).minimize(self.loss)
 
     def train(self, session, inputs, action, outputs):
         form, pos, deprel = inputs

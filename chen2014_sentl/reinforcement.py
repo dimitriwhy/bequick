@@ -130,6 +130,8 @@ def main():
                      help="The frequency of update target network.")
     cmd.add_argument("--replay-start-size", dest="replay_start_size", type=int, default=50000,
                      help="The size of of states before replay start.")
+    cmd.add_argument("--learning-rate", dest="learning_rate", type=float, default=0.00001,
+                     help="Learning rate of Adam.")
     cmd.add_argument("--language", dest="lang", default="en", help="the language")
     opts = cmd.parse_args()
 
@@ -161,7 +163,7 @@ def main():
     parser = Parser(system)
     model = DeepQNetwork(form_size=len(form_alphabet), form_dim=100, pos_size=len(pos_alphabet), pos_dim=20,
                          deprel_size=len(deprel_alphabet), deprel_dim=20, hidden_dim=opts.hidden_size,
-                         output_dim=system.num_actions(), dropout=opts.dropout, l2=opts.lamb)
+                         output_dim=system.num_actions(), dropout=opts.dropout, l2=opts.lamb, learning_rate = opts.learning_rate)
     indices, matrix = load_embedding(opts.embedding, form_alphabet, opts.embedding_size)
 
     if platform.system() == 'Windows':
