@@ -157,7 +157,7 @@ class DeepQNetwork(Network):
 
         # MLP
         hidden_layer = tf.nn.relu(tf.add(tf.matmul(inputs, self.W0), self.b0))
-        self.q_function = tf.add(tf.matmul(hidden_layer, self.W1), self.b1)
+        self.q_function = tf.tanh(tf.add(tf.matmul(hidden_layer, self.W1), self.b1))
 
         tgt_hidden_layer = tf.nn.relu(tf.add(tf.matmul(tgt_inputs, self.tgt_W0), self.tgt_b0))
         self.tgt_q_function = tf.add(tf.matmul(tgt_hidden_layer, self.tgt_W1), self.tgt_b1)
@@ -169,8 +169,8 @@ class DeepQNetwork(Network):
             hidden_layer2 = hidden_layer
         self.action = tf.placeholder(tf.int32, shape=(None, ), name="action")
         actions_one_hot = tf.one_hot(self.action, self.output_dim, 1.0, 0.0, name='action_one_hot')
-        predicted_q = tf.reduce_sum(tf.add(tf.matmul(hidden_layer2, self.W1), self.b1) * actions_one_hot,
-                                    reduction_indices=1)
+        predicted_q = tf.tanh(tf.reduce_sum(tf.add(tf.matmul(hidden_layer2, self.W1), self.b1) * actions_one_hot,
+                                    reduction_indices=1))
         regularizer = tf.nn.l2_loss(self.W0) + tf.nn.l2_loss(self.b0) + tf.nn.l2_loss(self.W1) + tf.nn.l2_loss(self.b1)
 
         self.loss = tf.reduce_mean(tf.square(predicted_q - self.output)) + l2 * regularizer

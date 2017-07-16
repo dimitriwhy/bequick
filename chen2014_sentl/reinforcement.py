@@ -184,12 +184,14 @@ def main():
     for n, train_data in enumerate(train_dataset):
         xs, ys = parser.generate_training_instance(train_data)
         s = State(train_data)
+        length = len(train_data)
         i = 0
         while not s.terminate():
             x = parser.parameterize_x(s)
             chosen_id = ys[i]
             # LOG.info("chosen_id = {0}".format(chosen_id))
             r = system.scored_transit(s, chosen_id)
+            r /= 1.0 * length
             next_x = parser.parameterize_x(s)
             valid_ids, valid_mask = get_valid_actions(parser, s)
             memory.add(x[0], x[1], x[2], chosen_id, r, next_x[0], next_x[1], next_x[2],\
