@@ -229,7 +229,7 @@ def main():
             logging.info("Start of iteration {0}, eps={1}, data shuffled.".format(iteration, eps))
             np.random.shuffle(train_dataset)
         data = train_dataset[n]
-
+        length = len(data)
         s = State(data)
         valid_ids, valid_mask = get_valid_actions(parser, s)
         while not s.terminate():
@@ -243,6 +243,7 @@ def main():
             else:
                 chosen_id = np.random.choice(valid_ids)
             r = system.scored_transit(s, chosen_id)
+            r /= 1.0 * length
             next_x = parser.parameterize_x(s)
             valid_ids, valid_mask = get_valid_actions(parser, s)
             memory.add(x[0], x[1], x[2], chosen_id, r, next_x[0], next_x[1], next_x[2], valid_mask, s.terminate())
